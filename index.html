@@ -86,6 +86,7 @@
 <div id="admin-modal">
     <div class="modal-body">
         <h3>Đăng chương mới</h3>
+        <input type="hidden" id="editIndex" value="-1">
         <input type="text" id="sName" placeholder="Tên bộ truyện">
         <input type="text" id="cName" placeholder="Tên chương">
         <input type="file" id="cFile" accept="image/*">
@@ -136,122 +137,17 @@
     };
     // ----------------------------------------------
 
-// 1. Khởi tạo kết nối
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-    let library = {};
-    let currentBookName = "";
-    let currentChapterIndex = 0;
-
-    // 2. Tải dữ liệu từ mây
-    db.ref('books').on('value', (snapshot) => {
-        library = snapshot.val() || {};
-        renderShelf();
-    });
-
-    // 3. Quản trị (nhớ sửa mật mã ở đây)
-    function openAdmin() {
-        if(prompt("Mật mã:") === "hivong@123") {
-            document.getElementById('admin-modal').style.display='block';
-        }
-    }
-    function closeAdmin() { document.getElementById('admin-modal').style.display='none'; }
-
-    function saveStory() {
-        const name = document.getElementById('sName').value, 
-              chap = document.getElementById('cName').value, 
-              text = document.getElementById('textContent').value, 
-              file = document.getElementById('cFile').files[0];
-        const btn = document.getElementById('saveBtn');
-        btn.innerText = "Đang tải lên..."; btn.disabled = true;
-
-        if(file) {
-            let r = new FileReader();
-            r.onload = e => {
-                let currentChapters = (library[name] && library[name].chapters) ? library[name].chapters : [];
-                currentChapters.push({ title: chap, content: text });
-                db.ref('books/' + name).set({ cover: e.target.result, chapters: currentChapters })
-                  .then(() => { alert("Đã lưu!"); location.reload(); });
-            };
-            r.readAsDataURL(file);
-        } else if(library[name]) {
-            library[name].chapters.push({ title: chap, content: text });
-            db.ref('books/' + name).set(library[name]).then(() => { alert("Đã lưu!"); location.reload(); });
-        }
-    }
-
-    // 4. Hiển thị giao diện
-    function renderShelf() {
-        const s = document.getElementById('shelf'); s.innerHTML = '';
-        for(let n in library) {
-            s.innerHTML += `<div class="book" onclick="showTOC('${n}')"><img src="${library[n].cover}"><div class="book-info">${n}</div></div>`;
-        }
-    }
-
-   function showTOC(n) {
-    document.getElementById('main-ui').style.display='none'; 
-    document.getElementById('toc-view').style.display='block';
-    document.getElementById('toc-title').innerText = n;
+**Hàm mở chế độ sửa:** (Dán thêm vào bất cứ đâu trong Script)
+```javascript
+function prepareEdit(bookName, index) {
+    const chapter = library[bookName].chapters[index];
+    document.getElementById('sName').value = bookName;
+    document.getElementById('cName').value = chapter.title;
+    document.getElementById('textContent').value = chapter.content;
+    document.getElementById('editIndex').value = index; // Ghi nhớ vị trí cần sửa
     
-    // Đọc lịch sử từ trình duyệt
-    const readHistory = JSON.parse(localStorage.getItem('readHistory') || '{}');
-    const readChapters = readHistory[n] || [];
-
-    document.getElementById('chapter-list').innerHTML = library[n].chapters.map((ch, i) => {
-        const isRead = readChapters.includes(i);
-        return `
-            <div class="chapter-item ${isRead ? 'read' : ''}" 
-                 style="padding:20px; border-bottom:1px solid #eee; cursor:pointer" 
-                 onclick="showReader('${n}',${i})">
-                ${ch.title}
-                ${isRead ? '<span class="read-tag">✓ Đã đọc</span>' : ''}
-            </div>
-        `;
-    }).join('');
-}
-    // 5. Bộ não điều khiển chuyển chương
-   function showReader(n, i) {
-    currentBookName = n;
-    currentChapterIndex = i;
-    
-    // Lưu chương này vào danh sách "Đã đọc"
-    let readHistory = JSON.parse(localStorage.getItem('readHistory') || '{}');
-    if (!readHistory[n]) readHistory[n] = [];
-    if (!readHistory[n].includes(i)) {
-        readHistory[n].push(i);
-        localStorage.setItem('readHistory', JSON.stringify(readHistory));
-    }
-
-    document.getElementById('toc-view').style.display='none'; 
-    document.getElementById('reader-view').style.display='block';
-    
-    const chapters = library[n].chapters;
-    document.getElementById('read-title').innerText = chapters[i].title;
-    document.getElementById('read-content').innerText = chapters[i].content;
-
-    const dropdown = document.getElementById('chapter-dropdown');
-    dropdown.innerHTML = chapters.map((ch, index) => 
-        `<option value="${index}" ${index == i ? 'selected' : ''}>${ch.title}</option>`
-    ).join('');
-
-    document.getElementById('prev-btn').disabled = i === 0;
-    document.getElementById('prev-btn-bottom').disabled = i === 0;
-    document.getElementById('next-btn').disabled = i === chapters.length - 1;
-    document.getElementById('next-btn-bottom').disabled = i === chapters.length - 1;
-
-    window.scrollTo(0,0);
-}
-
-    function changeChapter(step) {
-        const newIndex = currentChapterIndex + step;
-        if (newIndex >= 0 && newIndex < library[currentBookName].chapters.length) {
-            showReader(currentBookName, newIndex);
-        }
-    }
-
-    function jumpToChapter(index) {
-        showReader(currentBookName, parseInt(index));
-    }
+    document.getElementById('admin-modal').style.display = 'block';
+    document.getElementById('saveBtn').innerText = "Cập nhật chương";
 </script>
 </body>
 </html>
