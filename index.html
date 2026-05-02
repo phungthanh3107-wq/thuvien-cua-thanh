@@ -174,7 +174,18 @@
         document.getElementById('admin-modal').style.display = 'block';
         document.getElementById('saveBtn').innerText = "Cập nhật chương";
     }
-
+function deleteBook(name) {
+    if (confirm(`Cậu có chắc chắn muốn xóa vĩnh viễn bộ "${name}" không? Hành động này không thể hoàn tác đâu nha!`)) {
+        db.ref('books/' + name).remove()
+            .then(() => {
+                alert("Đã xóa sạch sành sanh!");
+                // Không cần load lại trang vì .on('value') sẽ tự cập nhật kệ sách
+            })
+            .catch((err) => {
+                alert("Lỗi xóa rồi Huy ơi: " + err.message);
+            });
+    }
+}
     function saveStory() {
         const name = document.getElementById('sName').value, 
               chap = document.getElementById('cName').value, 
@@ -209,12 +220,26 @@
     }
 
     // 5. Hiển thị Giao diện
-    function renderShelf() {
-        const s = document.getElementById('shelf'); s.innerHTML = '';
-        for(let n in library) {
-            s.innerHTML += `<div class="book" onclick="showTOC('${n}')"><img src="${library[n].cover}"><div class="book-info">${n}</div></div>`;
-        }
+   function renderShelf() {
+    const s = document.getElementById('shelf'); 
+    s.innerHTML = '';
+    
+    for(let n in library) {
+        // Nếu là Admin thì mới hiện nút Xóa màu đỏ
+        const delBtn = isAdminMode ? `
+            <button onclick="event.stopPropagation(); deleteBook('${n}')" 
+                style="position:absolute; top:10px; right:10px; background:rgba(255, 68, 68, 0.9); color:white; border:none; border-radius:50%; width:30px; height:30px; cursor:pointer; font-weight:bold; z-index:5;">
+                ✕
+            </button>` : '';
+
+        s.innerHTML += `
+            <div class="book" style="position:relative;" onclick="showTOC('${n}')">
+                ${delBtn}
+                <img src="${library[n].cover}">
+                <div class="book-info">${n}</div>
+            </div>`;
     }
+}
 
  function showTOC(n) {
     document.getElementById('main-ui').style.display='none'; 
