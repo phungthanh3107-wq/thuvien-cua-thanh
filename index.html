@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <title>Thư Viện Số</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <style>
+        :root { --accent: #6c5ce7; --bg: #f8f9fa; }
+        body { font-family: 'Segoe UI', "Times New Roman", serif; background: var(--bg); margin: 0; }
+        .container { max-width: 900px; margin: auto; padding: 20px; }
+        header { display: flex; justify-content: space-between; align-items: center; padding: 30px 0; border-bottom: 2px solid #eee; }
+        .shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 30px; margin-top: 40px; }
+        .book { background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 10px 20px rgba(0,0,0,0.05); cursor: pointer; transition: 0.3s; }
+        .book img { width: 100%; height: 280px; object-fit: cover; }
+        .book-info { padding: 15px; text-align: center; font-weight: 600; }
+        #admin-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); z-index: 100; }
+        .modal-body { background: white; width: 90%; max-width: 500px; margin: 50px auto; padding: 30px; border-radius: 20px; }
+        input, textarea { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; }
+        .btn { background: var(--accent); color: white; border: none; padding: 12px; width: 100%; border-radius: 10px; cursor: pointer; font-weight: bold; }
+        #toc-view, #reader-view { display: none; background: white; min-height: 100vh; padding: 40px 20px; border-radius: 20px; }
+        .content { font-size: 21px; line-height: 1.8; text-align: justify; font-family: "Times New Roman", serif; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+
+<div class="container" id="main-ui">
+    <header>
+        <div style="font-size:24px; font-weight:bold">Thanh's Library</div>
+        <span style="cursor:pointer; color:#ccc; font-size:12px" onclick="openAdmin()">Quản trị</span>
+    </header>
+    <div id="shelf" class="shelf"></div>
+</div>
+
+<div id="admin-modal">
+    <div class="modal-body">
+        <h3>Đăng chương mới</h3>
+        <input type="text" id="sName" placeholder="Tên bộ truyện">
+        <input type="text" id="cName" placeholder="Tên chương">
+        <input type="file" id="cFile" accept="image/*">
+        <textarea id="textContent" rows="8" placeholder="Nội dung..."></textarea>
+        <button class="btn" id="saveBtn" onclick="saveStory()">Lưu Lên Đám Mây</button>
+        <button onclick="closeAdmin()" style="background:none; border:none; color:gray; width:100%; margin-top:15px; cursor:pointer">Hủy</button>
+    </div>
+</div>
+
+<div class="container" id="toc-view">
+    <button onclick="location.reload()">← Quay về kệ sách</button>
+    <h1 id="toc-title"></h1>
+    <div id="chapter-list"></div>
+</div>
+
+<div class="container" id="reader-view">
+    <button id="to-toc">← Quay lại mục lục</button>
+    <h2 id="read-title" style="text-align:center"></h2>
+    <div id="read-content" class="content"></div>
+</div>
+
+<script>
+    // --- DÁN MÃ KẾT NỐI FIREBASE CỦA CẬU VÀO ĐÂY ---
+    const firebaseConfig = {
+  apiKey: "AIzaSyBV2vAqCNwh9AV8nkaP-LFK3nhRvTgGo8A",
+  authDomain: "thanh-89431.firebaseapp.com",
+  // Tớ đã thêm dòng databaseURL vào đây cho cậu rồi này:
+  databaseURL: "https://thanh-89431-default-rtdb.firebaseio.com", 
+  projectId: "thanh-89431",
+  storageBucket: "thanh-89431.firebasestorage.app",
+  messagingSenderId: "175005835895",
+  appId: "1:175005835895:web:e117a3664b79ee99399c72",
+  measurementId: "G-2GQMJQDB1W"
+    };
+    // ----------------------------------------------
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    let library = {};
+
+    // Tự động tải truyện từ đám mây
+    db.ref('books').on('value', (snapshot) => {
+        library = snapshot.val() || {};
+        renderShelf();
+    });
+
+    function openAdmin() {
+        if(prompt("Mật mã:") === "hivong@123") document.getElementById('admin-modal').style.display='block';
+    }
+    function closeAdmin() { document.getElementById('admin-modal').style.display='none'; }
+
+    function saveStory() {
+        const name = document.getElementById('sName').value, chap = document.getElementById('cName').value, text = document.getElementById('textContent').value, file = document.getElementById('cFile').files[0];
+        const btn = document.getElementById('saveBtn');
+        btn.innerText = "Đang tải lên..."; btn.disabled = true;
+
+        if(file) {
+            let r = new FileReader();
+            r.onload = e => {
+                let currentChapters = (library[name] && library[name].chapters) ? library[name].chapters : [];
+                currentChapters.push({ title: chap, content: text });
+                db.ref('books/' + name).set({ cover: e.target.result, chapters: currentChapters })
+                  .then(() => { alert("Đã lưu!"); location.reload(); });
+            };
+            r.readAsDataURL(file);
+        } else if(library[name]) {
+            library[name].chapters.push({ title: chap, content: text });
+            db.ref('books/' + name).set(library[name]).then(() => { alert("Đã lưu!"); location.reload(); });
+        }
+    }
+
+    function renderShelf() {
+        const s = document.getElementById('shelf'); s.innerHTML = '';
+        for(let n in library) {
+            s.innerHTML += `<div class="book" onclick="showTOC('${n}')"><img src="${library[n].cover}"><div class="book-info">${n}</div></div>`;
+        }
+    }
+
+    function showTOC(n) {
+        document.getElementById('main-ui').style.display='none'; document.getElementById('toc-view').style.display='block';
+        document.getElementById('toc-title').innerText = n;
+        document.getElementById('chapter-list').innerHTML = library[n].chapters.map((ch, i) => `<div style="padding:20px; border-bottom:1px solid #eee; cursor:pointer" onclick="showReader('${n}',${i})">${ch.title}</div>`).join('');
+    }
+
+    function showReader(n, i) {
+        document.getElementById('toc-view').style.display='none'; document.getElementById('reader-view').style.display='block';
+        document.getElementById('read-title').innerText = library[n].chapters[i].title;
+        document.getElementById('read-content').innerText = library[n].chapters[i].content;
+        document.getElementById('to-toc').onclick = () => { document.getElementById('reader-view').style.display='none'; document.getElementById('toc-view').style.display='block'; };
+        window.scrollTo(0,0);
+    }
+</script>
+</body>
+</html>
