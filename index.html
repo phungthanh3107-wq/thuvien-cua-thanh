@@ -136,13 +136,13 @@
         measurementId: "G-2GQMJQDB1W"
     };
 
-    // 2. Khởi tạo hệ thống
+   // 2. Khởi tạo hệ thống
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
     let library = {};
     let currentBookName = "";
     let currentChapterIndex = 0;
-
+    let isAdminMode = false; // 
     // 3. Tự động tải truyện từ đám mây
     db.ref('books').on('value', (snapshot) => {
         library = snapshot.val() || {};
@@ -151,12 +151,16 @@
 
     // 4. Các hàm Quản trị
     function openAdmin() {
-        document.getElementById('editIndex').value = "-1";
-        document.getElementById('saveBtn').innerText = "Lưu Lên Đám Mây";
-        if(prompt("Mật mã:") === "hivong@123") {
-            document.getElementById('admin-modal').style.display='block';
-        }
+    let pass = prompt("Mật mã quản trị:");
+    if(pass === "hivong@123") {
+        isAdminMode = true; // Kích hoạt chế độ Ad
+        renderShelf(); // Vẽ lại kệ sách để hiện các quyền năng mới (nếu cần)
+        document.getElementById('admin-modal').style.display='block';
+        alert("Chào chủ nhân! Chế độ chỉnh sửa đã được kích hoạt.");
+    } else {
+        alert("Sai mật mã rồi bro!");
     }
+}
 
     function closeAdmin() { document.getElementById('admin-modal').style.display='none'; }
 
@@ -212,27 +216,30 @@
         }
     }
 
-    function showTOC(n) {
-        document.getElementById('main-ui').style.display='none'; 
-        document.getElementById('toc-view').style.display='block';
-        document.getElementById('toc-title').innerText = n;
+ function showTOC(n) {
+    document.getElementById('main-ui').style.display='none'; 
+    document.getElementById('toc-view').style.display='block';
+    document.getElementById('toc-title').innerText = n;
+    
+    const history = JSON.parse(localStorage.getItem('readHistory') || '{}');
+    const readChapters = history[n] || [];
+
+    document.getElementById('chapter-list').innerHTML = library[n].chapters.map((ch, i) => {
+        const isRead = readChapters.includes(i);
         
-        const history = JSON.parse(localStorage.getItem('readHistory') || '{}');
-        const readChapters = history[n] || [];
+        // Đoạn này kiểm tra: Nếu là Ad thì hiện nút sửa, không thì thôi
+        const editBtn = isAdminMode ? `<button onclick="prepareEdit('${n}',${i})" style="background:none; border:none; cursor:pointer; font-size:16px;">✎</button>` : '';
 
-        document.getElementById('chapter-list').innerHTML = library[n].chapters.map((ch, i) => {
-            const isRead = readChapters.includes(i);
-            return `
-                <div class="chapter-item" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding:15px 20px;">
-                    <div onclick="showReader('${n}',${i})" style="flex-grow:1; cursor:pointer">
-                        ${ch.title} ${isRead ? '<span class="read-tag">✓ Đã đọc</span>' : ''}
-                    </div>
-                    <button onclick="prepareEdit('${n}',${i})" style="background:none; border:none; cursor:pointer; font-size:16px;">✎</button>
+        return `
+            <div class="chapter-item" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding:15px 20px;">
+                <div onclick="showReader('${n}',${i})" style="flex-grow:1; cursor:pointer">
+                    ${ch.title} ${isRead ? '<span class="read-tag">✓ Đã đọc</span>' : ''}
                 </div>
-            `;
-        }).join('');
-    }
-
+                ${editBtn} 
+            </div>
+        `;
+    }).join('');
+}
     function showReader(n, i) {
         currentBookName = n; currentChapterIndex = i;
         
