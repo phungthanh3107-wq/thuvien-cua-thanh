@@ -124,30 +124,151 @@
 </div>
 
 <script>
-    // --- DÁN MÃ KẾT NỐI FIREBASE CỦA CẬU VÀO ĐÂY ---
+    // 1. Cấu hình Firebase
     const firebaseConfig = {
-  apiKey: "AIzaSyBV2vAqCNwh9AV8nkaP-LFK3nhRvTgGo8A",
-  authDomain: "thanh-89431.firebaseapp.com",
-  databaseURL: "https://thanh-89431-default-rtdb.firebaseio.com", 
-  projectId: "thanh-89431",
-  storageBucket: "thanh-89431.firebasestorage.app",
-  messagingSenderId: "175005835895",
-  appId: "1:175005835895:web:e117a3664b79ee99399c72",
-  measurementId: "G-2GQMJQDB1W"
+        apiKey: "AIzaSyBV2vAqCNwh9AV8nkaP-LFK3nhRvTgGo8A",
+        authDomain: "thanh-89431.firebaseapp.com",
+        databaseURL: "[https://thanh-89431-default-rtdb.firebaseio.com](https://thanh-89431-default-rtdb.firebaseio.com)", 
+        projectId: "thanh-89431",
+        storageBucket: "thanh-89431.firebasestorage.app",
+        messagingSenderId: "175005835895",
+        appId: "1:175005835895:web:e117a3664b79ee99399c72",
+        measurementId: "G-2GQMJQDB1W"
     };
-    // ----------------------------------------------
 
-**Hàm mở chế độ sửa:** (Dán thêm vào bất cứ đâu trong Script)
-```javascript
-function prepareEdit(bookName, index) {
-    const chapter = library[bookName].chapters[index];
-    document.getElementById('sName').value = bookName;
-    document.getElementById('cName').value = chapter.title;
-    document.getElementById('textContent').value = chapter.content;
-    document.getElementById('editIndex').value = index; // Ghi nhớ vị trí cần sửa
-    
-    document.getElementById('admin-modal').style.display = 'block';
-    document.getElementById('saveBtn').innerText = "Cập nhật chương";
+    // 2. Khởi tạo hệ thống
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    let library = {};
+    let currentBookName = "";
+    let currentChapterIndex = 0;
+
+    // 3. Tự động tải truyện từ đám mây
+    db.ref('books').on('value', (snapshot) => {
+        library = snapshot.val() || {};
+        renderShelf();
+    });
+
+    // 4. Các hàm Quản trị
+    function openAdmin() {
+        document.getElementById('editIndex').value = "-1";
+        document.getElementById('saveBtn').innerText = "Lưu Lên Đám Mây";
+        if(prompt("Mật mã:") === "hivong@123") {
+            document.getElementById('admin-modal').style.display='block';
+        }
+    }
+
+    function closeAdmin() { document.getElementById('admin-modal').style.display='none'; }
+
+    function prepareEdit(bookName, index) {
+        const chapter = library[bookName].chapters[index];
+        document.getElementById('sName').value = bookName;
+        document.getElementById('cName').value = chapter.title;
+        document.getElementById('textContent').value = chapter.content;
+        document.getElementById('editIndex').value = index;
+        
+        document.getElementById('admin-modal').style.display = 'block';
+        document.getElementById('saveBtn').innerText = "Cập nhật chương";
+    }
+
+    function saveStory() {
+        const name = document.getElementById('sName').value, 
+              chap = document.getElementById('cName').value, 
+              text = document.getElementById('textContent').value,
+              file = document.getElementById('cFile').files[0],
+              editIndex = parseInt(document.getElementById('editIndex').value);
+        
+        const btn = document.getElementById('saveBtn');
+        btn.innerText = "Đang xử lý..."; btn.disabled = true;
+
+        let currentChapters = (library[name] && library[name].chapters) ? library[name].chapters : [];
+
+        if (editIndex > -1) {
+            currentChapters[editIndex] = { title: chap, content: text };
+        } else {
+            currentChapters.push({ title: chap, content: text });
+        }
+
+        if(file && editIndex === -1) {
+            let r = new FileReader();
+            r.onload = e => {
+                db.ref('books/' + name).set({ cover: e.target.result, chapters: currentChapters })
+                  .then(() => { alert("Đã thành công!"); location.reload(); });
+            };
+            r.readAsDataURL(file);
+        } else {
+            db.ref('books/' + name + '/chapters').set(currentChapters).then(() => {
+                alert("Đã thành công!");
+                location.reload();
+            });
+        }
+    }
+
+    // 5. Hiển thị Giao diện
+    function renderShelf() {
+        const s = document.getElementById('shelf'); s.innerHTML = '';
+        for(let n in library) {
+            s.innerHTML += `<div class="book" onclick="showTOC('${n}')"><img src="${library[n].cover}"><div class="book-info">${n}</div></div>`;
+        }
+    }
+
+    function showTOC(n) {
+        document.getElementById('main-ui').style.display='none'; 
+        document.getElementById('toc-view').style.display='block';
+        document.getElementById('toc-title').innerText = n;
+        
+        const history = JSON.parse(localStorage.getItem('readHistory') || '{}');
+        const readChapters = history[n] || [];
+
+        document.getElementById('chapter-list').innerHTML = library[n].chapters.map((ch, i) => {
+            const isRead = readChapters.includes(i);
+            return `
+                <div class="chapter-item" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding:15px 20px;">
+                    <div onclick="showReader('${n}',${i})" style="flex-grow:1; cursor:pointer">
+                        ${ch.title} ${isRead ? '<span class="read-tag">✓ Đã đọc</span>' : ''}
+                    </div>
+                    <button onclick="prepareEdit('${n}',${i})" style="background:none; border:none; cursor:pointer; font-size:16px;">✎</button>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function showReader(n, i) {
+        currentBookName = n; currentChapterIndex = i;
+        
+        let history = JSON.parse(localStorage.getItem('readHistory') || '{}');
+        if (!history[n]) history[n] = [];
+        if (!history[n].includes(i)) { history[n].push(i); localStorage.setItem('readHistory', JSON.stringify(history)); }
+
+        document.getElementById('toc-view').style.display='none'; 
+        document.getElementById('reader-view').style.display='block';
+        
+        const chapters = library[n].chapters;
+        document.getElementById('read-title').innerText = chapters[i].title;
+        document.getElementById('read-content').innerText = chapters[i].content;
+
+        const dropdown = document.getElementById('chapter-dropdown');
+        dropdown.innerHTML = chapters.map((ch, index) => 
+            `<option value="${index}" ${index == i ? 'selected' : ''}>${ch.title}</option>`
+        ).join('');
+
+        const isFirst = i === 0;
+        const isLast = i === chapters.length - 1;
+        document.getElementById('prev-btn').disabled = isFirst;
+        document.getElementById('prev-btn-bottom').disabled = isFirst;
+        document.getElementById('next-btn').disabled = isLast;
+        document.getElementById('next-btn-bottom').disabled = isLast;
+        window.scrollTo(0,0);
+    }
+
+    function changeChapter(step) {
+        const newIndex = currentChapterIndex + step;
+        if (newIndex >= 0 && newIndex < library[currentBookName].chapters.length) showReader(currentBookName, newIndex);
+    }
+
+    function jumpToChapter(index) {
+        showReader(currentBookName, parseInt(index));
+    }
 </script>
 </body>
 </html>
