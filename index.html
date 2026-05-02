@@ -19,6 +19,47 @@
         input, textarea { width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; }
         .btn { background: var(--accent); color: white; border: none; padding: 12px; width: 100%; border-radius: 10px; cursor: pointer; font-weight: bold; }
         #toc-view, #reader-view { display: none; background: white; min-height: 100vh; padding: 40px 20px; border-radius: 20px; }
+        /* Thanh điều hướng chương */
+.nav-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 15px;
+    background: #222; /* Màu tối như hình cậu gửi */
+    padding: 10px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    position: sticky;
+    top: 10px;
+    z-index: 10;
+}
+
+.nav-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: white;
+    color: black;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: 0.3s;
+}
+
+.nav-btn:hover { background: var(--accent); color: white; }
+.nav-btn:disabled { background: #555; cursor: not-allowed; opacity: 0.5; }
+
+.chapter-select {
+    padding: 8px 15px;
+    border-radius: 5px;
+    border: none;
+    font-weight: 500;
+}
+
+.home-icon { font-size: 24px; color: white; cursor: pointer; text-decoration: none; }
         .content { font-size: 21px; line-height: 1.8; text-align: justify; font-family: "Times New Roman", serif; white-space: pre-wrap; }
     </style>
 </head>
@@ -51,9 +92,24 @@
 </div>
 
 <div class="container" id="reader-view">
-    <button id="to-toc">← Quay lại mục lục</button>
-    <h2 id="read-title" style="text-align:center"></h2>
+    <div class="nav-bar">
+        <a class="home-icon" onclick="location.reload()">⌂</a> 
+        <button class="nav-btn" id="prev-btn" onclick="changeChapter(-1)"> < </button>
+        
+        <select id="chapter-dropdown" class="chapter-select" onchange="jumpToChapter(this.value)">
+            </select>
+
+        <button class="nav-btn" id="next-btn" onclick="changeChapter(1)"> > </button>
+    </div>
+
+    <h2 id="read-title" style="text-align:center; margin-top:30px;"></h2>
     <div id="read-content" class="content"></div>
+    
+    <div class="nav-bar" style="margin-top:50px; position: static;">
+        <button class="nav-btn" id="prev-btn-bottom" onclick="changeChapter(-1)"> < </button>
+        <button class="nav-btn" id="next-btn-bottom" onclick="changeChapter(1)"> > </button>
+    </div>
+</div>
 </div>
 
 <script>
@@ -71,23 +127,32 @@
     };
     // ----------------------------------------------
 
+// 1. Khởi tạo kết nối
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
     let library = {};
+    let currentBookName = "";
+    let currentChapterIndex = 0;
 
-    // Tự động tải truyện từ đám mây
+    // 2. Tải dữ liệu từ mây
     db.ref('books').on('value', (snapshot) => {
         library = snapshot.val() || {};
         renderShelf();
     });
 
+    // 3. Quản trị (Huy nhớ sửa mật mã ở đây nha)
     function openAdmin() {
-        if(prompt("Mật mã:") === "hivong@123") document.getElementById('admin-modal').style.display='block';
+        if(prompt("Mật mã:") === "hivong@123") {
+            document.getElementById('admin-modal').style.display='block';
+        }
     }
     function closeAdmin() { document.getElementById('admin-modal').style.display='none'; }
 
     function saveStory() {
-        const name = document.getElementById('sName').value, chap = document.getElementById('cName').value, text = document.getElementById('textContent').value, file = document.getElementById('cFile').files[0];
+        const name = document.getElementById('sName').value, 
+              chap = document.getElementById('cName').value, 
+              text = document.getElementById('textContent').value, 
+              file = document.getElementById('cFile').files[0];
         const btn = document.getElementById('saveBtn');
         btn.innerText = "Đang tải lên..."; btn.disabled = true;
 
@@ -106,6 +171,7 @@
         }
     }
 
+    // 4. Hiển thị giao diện
     function renderShelf() {
         const s = document.getElementById('shelf'); s.innerHTML = '';
         for(let n in library) {
@@ -114,17 +180,52 @@
     }
 
     function showTOC(n) {
-        document.getElementById('main-ui').style.display='none'; document.getElementById('toc-view').style.display='block';
+        document.getElementById('main-ui').style.display='none'; 
+        document.getElementById('toc-view').style.display='block';
         document.getElementById('toc-title').innerText = n;
-        document.getElementById('chapter-list').innerHTML = library[n].chapters.map((ch, i) => `<div style="padding:20px; border-bottom:1px solid #eee; cursor:pointer" onclick="showReader('${n}',${i})">${ch.title}</div>`).join('');
+        document.getElementById('chapter-list').innerHTML = library[n].chapters.map((ch, i) => 
+            `<div style="padding:20px; border-bottom:1px solid #eee; cursor:pointer" onclick="showReader('${n}',${i})">${ch.title}</div>`
+        ).join('');
     }
 
+    // 5. Bộ não điều khiển chuyển chương
     function showReader(n, i) {
-        document.getElementById('toc-view').style.display='none'; document.getElementById('reader-view').style.display='block';
-        document.getElementById('read-title').innerText = library[n].chapters[i].title;
-        document.getElementById('read-content').innerText = library[n].chapters[i].content;
-        document.getElementById('to-toc').onclick = () => { document.getElementById('reader-view').style.display='none'; document.getElementById('toc-view').style.display='block'; };
+        currentBookName = n;
+        currentChapterIndex = i;
+        
+        document.getElementById('toc-view').style.display='none'; 
+        document.getElementById('reader-view').style.display='block';
+        
+        const chapters = library[n].chapters;
+        document.getElementById('read-title').innerText = chapters[i].title;
+        document.getElementById('read-content').innerText = chapters[i].content;
+
+        const dropdown = document.getElementById('chapter-dropdown');
+        dropdown.innerHTML = chapters.map((ch, index) => 
+            `<option value="${index}" ${index == i ? 'selected' : ''}>${ch.title}</option>`
+        ).join('');
+
+        const isFirst = i === 0;
+        const isLast = i === chapters.length - 1;
+        
+        // Vô hiệu hóa nút nếu không còn chương để chuyển
+        document.getElementById('prev-btn').disabled = isFirst;
+        document.getElementById('prev-btn-bottom').disabled = isFirst;
+        document.getElementById('next-btn').disabled = isLast;
+        document.getElementById('next-btn-bottom').disabled = isLast;
+
         window.scrollTo(0,0);
+    }
+
+    function changeChapter(step) {
+        const newIndex = currentChapterIndex + step;
+        if (newIndex >= 0 && newIndex < library[currentBookName].chapters.length) {
+            showReader(currentBookName, newIndex);
+        }
+    }
+
+    function jumpToChapter(index) {
+        showReader(currentBookName, parseInt(index));
     }
 </script>
 </body>
