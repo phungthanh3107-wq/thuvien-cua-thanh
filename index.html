@@ -278,7 +278,7 @@ function deleteBook(name) {
     db.ref(`comments/${currentBookName}/${currentChapterIndex}`).push(cmtData)
       .then(() => {
           document.getElementById('cmtContent').value = ""; // Xóa trắng ô nhập sau khi gửi
-          alert("Gửi bình luận thành công rồi Thanh ơi!");
+        alert("Cảm ơn cậu đã để lại bình luận nhé! ✨");
       });
 }
 
@@ -321,7 +321,6 @@ function deleteBook(name) {
     document.getElementById('read-title').innerText = chapters[i].title;
     document.getElementById('read-content').innerText = chapters[i].content;
 
-    // Cập nhật dropdown
     const dropdown = document.getElementById('chapter-dropdown');
     dropdown.innerHTML = chapters.map((ch, index) => 
         `<option value="${index}" ${index == i ? 'selected' : ''}>${ch.title}</option>`
@@ -332,7 +331,7 @@ function deleteBook(name) {
     document.getElementById('next-btn').disabled = i === chapters.length - 1;
     document.getElementById('next-btn-bottom').disabled = i === chapters.length - 1;
 
-    // --- TẢI BÌNH LUẬN ---
+    // --- TẢI BÌNH LUẬN VÀ HIỆN NÚT XÓA CHO AD ---
     const cmtList = document.getElementById('comment-list');
     cmtList.innerHTML = "Đang tải bình luận...";
     
@@ -343,12 +342,22 @@ function deleteBook(name) {
             return;
         }
         
-        cmtList.innerHTML = Object.values(data).reverse().map(c => `
-            <div class="cmt-item">
-                <span class="cmt-user">${c.name} <small class="cmt-time">${c.time}</small></span>
-                <div class="cmt-text">${c.text}</div>
-            </div>
-        `).join('');
+        cmtList.innerHTML = Object.entries(data).reverse().map(([id, c]) => {
+            // Nút xóa chỉ hiện khi Thanh đã nhập Pass Admin
+            const delBtn = isAdminMode ? `
+                <button onclick="deleteComment('${n}', ${i}, '${id}')" 
+                        style="background:none; border:none; color:red; cursor:pointer; font-size:12px; float:right;">
+                    [Xóa]
+                </button>` : '';
+
+            return `
+                <div class="cmt-item">
+                    ${delBtn}
+                    <span class="cmt-user">${c.name} <small class="cmt-time">${c.time}</small></span>
+                    <div class="cmt-text">${c.text}</div>
+                </div>
+            `;
+        }).join('');
     });
 
     window.scrollTo(0,0);
@@ -361,6 +370,12 @@ function deleteBook(name) {
     function jumpToChapter(index) {
         showReader(currentBookName, parseInt(index));
     }
+    function deleteComment(book, chapter, cmtId) {
+    if (confirm("Thanh có chắc muốn xóa vĩnh viễn bình luận này không?")) {
+        db.ref(`comments/${book}/${chapter}/${cmtId}`).remove()
+          .then(() => alert("Đã dọn dẹp cmt xong!"));
+    }
+}
 </script>
 </body>
 </html>
