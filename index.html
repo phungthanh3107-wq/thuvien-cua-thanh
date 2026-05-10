@@ -71,6 +71,17 @@
     display: inline-block;
 }
 .chapter-item.read { color: #888; }
+        .cmt-item {
+    background: white;
+    padding: 15px;
+    border-radius: 10px;
+    border-left: 4px solid var(--accent);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    margin-bottom: 15px;
+}
+.cmt-user { font-weight: bold; color: var(--accent); margin-bottom: 5px; display: block; }
+.cmt-time { font-size: 11px; color: #999; margin-left: 10px; }
+.cmt-text { font-size: 16px; line-height: 1.5; color: #444; }
     </style>
 </head>
 <body>
@@ -119,6 +130,17 @@
     <div class="nav-bar" style="margin-top:50px; position: static;">
         <button class="nav-btn" id="prev-btn-bottom" onclick="changeChapter(-1)"> < </button>
         <button class="nav-btn" id="next-btn-bottom" onclick="changeChapter(1)"> > </button>
+    </div>
+    <div style="margin-top: 50px; border-top: 1px solid #ddd; padding-top: 30px;">
+        <h3>Bình luận từ độc giả</h3>
+        
+        <div style="background: #f9f9f9; padding: 20px; border-radius: 15px; margin-bottom: 30px;">
+            <input type="text" id="cmtName" placeholder="Tên của cậu..." style="margin-bottom: 10px;">
+            <textarea id="cmtContent" rows="3" placeholder="Cảm nhận của cậu về chương này..."></textarea>
+            <button class="btn" onclick="sendComment()" style="margin-top: 10px;">Gửi bình luận</button>
+        </div>
+
+        <div id="comment-list"></div>
     </div>
 </div>
 </div>
@@ -240,6 +262,25 @@ function deleteBook(name) {
             </div>`;
     }
 }
+    function sendComment() {
+    const name = document.getElementById('cmtName').value || "Độc giả ẩn danh";
+    const text = document.getElementById('cmtContent').value;
+    
+    if(!text) return alert("Thanh ơi, bảo độc giả nhập nội dung bình luận đã nhé!");
+
+    const cmtData = {
+        name: name,
+        text: text,
+        time: new Date().toLocaleString('vi-VN')
+    };
+
+    // Lưu vào Firebase theo cấu trúc: comments -> [Tên truyện] -> [Chương số mấy]
+    db.ref(`comments/${currentBookName}/${currentChapterIndex}`).push(cmtData)
+      .then(() => {
+          document.getElementById('cmtContent').value = ""; // Xóa trắng ô nhập sau khi gửi
+          alert("Gửi bình luận thành công rồi Thanh ơi!");
+      });
+}
 
  function showTOC(n) {
     document.getElementById('main-ui').style.display='none'; 
@@ -266,33 +307,52 @@ function deleteBook(name) {
     }).join('');
 }
     function showReader(n, i) {
-        currentBookName = n; currentChapterIndex = i;
+    currentBookName = n; currentChapterIndex = i;
+    
+    // Đánh dấu đã đọc
+    let history = JSON.parse(localStorage.getItem('readHistory') || '{}');
+    if (!history[n]) history[n] = [];
+    if (!history[n].includes(i)) { history[n].push(i); localStorage.setItem('readHistory', JSON.stringify(history)); }
+
+    document.getElementById('toc-view').style.display='none'; 
+    document.getElementById('reader-view').style.display='block';
+    
+    const chapters = library[n].chapters;
+    document.getElementById('read-title').innerText = chapters[i].title;
+    document.getElementById('read-content').innerText = chapters[i].content;
+
+    // Cập nhật dropdown
+    const dropdown = document.getElementById('chapter-dropdown');
+    dropdown.innerHTML = chapters.map((ch, index) => 
+        `<option value="${index}" ${index == i ? 'selected' : ''}>${ch.title}</option>`
+    ).join('');
+
+    document.getElementById('prev-btn').disabled = i === 0;
+    document.getElementById('prev-btn-bottom').disabled = i === 0;
+    document.getElementById('next-btn').disabled = i === chapters.length - 1;
+    document.getElementById('next-btn-bottom').disabled = i === chapters.length - 1;
+
+    // --- TẢI BÌNH LUẬN ---
+    const cmtList = document.getElementById('comment-list');
+    cmtList.innerHTML = "Đang tải bình luận...";
+    
+    db.ref(`comments/${n}/${i}`).on('value', (snapshot) => {
+        const data = snapshot.val();
+        if(!data) {
+            cmtList.innerHTML = "<p style='color:gray; font-style:italic;'>Chưa có bình luận nào. Hãy là người đầu tiên!</p>";
+            return;
+        }
         
-        let history = JSON.parse(localStorage.getItem('readHistory') || '{}');
-        if (!history[n]) history[n] = [];
-        if (!history[n].includes(i)) { history[n].push(i); localStorage.setItem('readHistory', JSON.stringify(history)); }
+        cmtList.innerHTML = Object.values(data).reverse().map(c => `
+            <div class="cmt-item">
+                <span class="cmt-user">${c.name} <small class="cmt-time">${c.time}</small></span>
+                <div class="cmt-text">${c.text}</div>
+            </div>
+        `).join('');
+    });
 
-        document.getElementById('toc-view').style.display='none'; 
-        document.getElementById('reader-view').style.display='block';
-        
-        const chapters = library[n].chapters;
-        document.getElementById('read-title').innerText = chapters[i].title;
-        document.getElementById('read-content').innerText = chapters[i].content;
-
-        const dropdown = document.getElementById('chapter-dropdown');
-        dropdown.innerHTML = chapters.map((ch, index) => 
-            `<option value="${index}" ${index == i ? 'selected' : ''}>${ch.title}</option>`
-        ).join('');
-
-        const isFirst = i === 0;
-        const isLast = i === chapters.length - 1;
-        document.getElementById('prev-btn').disabled = isFirst;
-        document.getElementById('prev-btn-bottom').disabled = isFirst;
-        document.getElementById('next-btn').disabled = isLast;
-        document.getElementById('next-btn-bottom').disabled = isLast;
-        window.scrollTo(0,0);
-    }
-
+    window.scrollTo(0,0);
+}
     function changeChapter(step) {
         const newIndex = currentChapterIndex + step;
         if (newIndex >= 0 && newIndex < library[currentBookName].chapters.length) showReader(currentBookName, newIndex);
